@@ -54,21 +54,25 @@ library(car)
 library(GGally)
 library(ROCR)
 library(data.table)
-install.packages("Hmisc")
 library(Hmisc)
+library(tibble)
+library(knitr)
+library(here)
 ```
 
 Import Data
 
 ```{r Bank Data}
-data_path <- '/Users/dap45/OneDrive/Desktop/Data Analytics/DA 6813 - Analytics Applications/Assignments/Case Study 1/bank-additional-full.csv'
-df = fread(data_path) |> as_tibble()
+data_path <- "https://raw.githubusercontent.com/kccasey1985/Case-Study-Bank-Marketting-/main/bank-additional-full.csv"
+
+df <- fread(data_path, sep = ";") |> as_tibble()
 glimpse(df)
 ```
 ```{r Bank Data}
-setwd("~/GitHub/Data-Analytics-Applications")
-data_path <- 'bank-additional-full.csv'
-df = fread(data_path) |> as_tibble()
+opts_knit$set(root.dir = here())
+
+# load the dataset
+df <- fread(here("bank-additional-full.csv"), sep = ";") |> as_tibble()
 glimpse(df)
 ```
 
