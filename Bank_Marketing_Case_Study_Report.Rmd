@@ -1,0 +1,66 @@
+---
+title: "Bank Marketing Case Study 1"
+author: "Dominica Peri"
+date: "2025-09-08"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+1. Executive Summary LLA (Last)
+
+2. The Problem
+    1. Introduction/Background
+    2. Purpose of study/importance of study/statement of problem
+    3. Questions to be answered/conceptual statement of hypotheses
+    4. Outline of remainder of report (brief)
+    
+3. Review of Related Literature
+    1. Acquaint reader with existing methodologies used in this area
+    
+4. Methodology
+    1. Identification, classification and operationalization of variables.
+    2. Statements of hypotheses being tested and/or models being developed.
+    3. Sampling techniques, if full data is not being used.
+    4. Data collection process, including data sources, data size, etc. Primary/secondary?
+    5. Modeling analysis/techniques used
+    6. Methodological assumptions and limitations.
+    
+5. Data
+    1. Data cleaning
+    2. Data preprocessing
+    3. Data limitations
+    
+6. Findings (Results)
+    1. Results presented in tables or charts when appropriate
+    2. Results reported with respect to hypotheses/models.
+    3. Factual information kept separate from interpretation, inference and evaluation.
+    
+7. Conclusions and Recommendations
+    1. Discuss alternative methodologies
+
+#____________________________________________________________________________
+
+Load Libraries
+
+```{r Libraries}
+library(MASS) 
+library(ggplot2)
+library(tidyverse)
+library(corrplot)
+library(car)
+library(GGally)
+library(ROCR)
+library(data.table)
+```
+
+Import Data
+
+```{r Bank Data}
+data_path <- '/Users/dap45/OneDrive/Desktop/Data Analytics/DA 6813 - Analytics Applications/Assignments/Case Study 1/bank-additional-full.csv'
+df = fread(data_path) |> as_tibble()
+glimpse(df)
+```
+
