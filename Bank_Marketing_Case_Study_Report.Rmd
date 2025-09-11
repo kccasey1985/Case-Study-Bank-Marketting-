@@ -9,7 +9,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-1. Executive Summary lkjkl (Last)
+1. Executive Summary (Last)
 
 2. The Problem
     1. Introduction/Background
@@ -54,6 +54,8 @@ library(car)
 library(GGally)
 library(ROCR)
 library(data.table)
+install.packages("Hmisc")
+library(Hmisc)
 ```
 
 Import Data
@@ -63,4 +65,122 @@ data_path <- '/Users/dap45/OneDrive/Desktop/Data Analytics/DA 6813 - Analytics A
 df = fread(data_path) |> as_tibble()
 glimpse(df)
 ```
+```{r Bank Data}
+setwd("~/GitHub/Data-Analytics-Applications")
+data_path <- 'bank-additional-full.csv'
+df = fread(data_path) |> as_tibble()
+glimpse(df)
+```
+
+
+```{r Bank Data}
+
+head(df)
+
+```
+
+
+```{r Bank Data}
+
+str(df)
+
+```
+
+```{r Bank Data}
+
+summary(df)
+
+```
+
+```{r Bank Data}
+
+df2 <- df |> 
+  mutate(job = factor(job),
+         marital  = factor(marital),
+         education  = factor(education),
+         default  = factor(default),
+         loan  = factor(loan),
+         contact  = factor(contact),
+         month   = factor(month),
+         day_of_week  = factor(day_of_week),
+         poutcome    = factor(poutcome),
+         y   = factor(y),
+         housing  = factor(housing))
+
+
+
+```
+
+```{r Bank Data}
+
+str(df2)
+
+```
+
+```{r Bank Data}
+
+summary(df2)
+
+```
+```{r Bank Data}
+
+anyNA(df2)
+
+```
+
+```{r Bank Data}
+
+df2 <- df2 |> 
+  mutate(age= cut(age, breaks = c(20, 30, 40, 50, 60, 70, 100),
+                         labels = c("21-30", "31-40", "41-50", "51-60", "61-70", "71+"),
+                         right = F))|>
+  select(-duration)
+
+```
+
+```{r Bank Data}
+
+summary(df2)
+
+```
+
+
+```{r Bank Data}
+
+df2_num <- dplyr::select_if(df2, is.numeric)
+matrix = cor(df2_num)
+corrplot(matrix, method = c("number")) 
+
+```
+
+
+
+
+
+
+
+```{r Bank Data}
+
+corrplot::corrplot(matrix, method = "circle")
+
+
+```
+
+
+
+
+
+```{r Bank Data}
+
+lm_model <- lm(y ~ ., data = df2)
+
+```
+
+```{r Bank Data}
+vif_values <- car::vif(lm_model)
+print(vif_values)
+
+
+```
+
 
