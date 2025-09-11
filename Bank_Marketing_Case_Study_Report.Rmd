@@ -62,13 +62,13 @@ library(here)
 
 Import Data
 
-```{r Bank Data}
+```{r}
 data_path <- "https://raw.githubusercontent.com/kccasey1985/Case-Study-Bank-Marketting-/main/bank-additional-full.csv"
 
 df <- fread(data_path, sep = ";") |> as_tibble()
 glimpse(df)
 ```
-```{r Bank Data}
+```{r}
 opts_knit$set(root.dir = here())
 
 # load the dataset
@@ -77,26 +77,26 @@ glimpse(df)
 ```
 
 
-```{r Bank Data}
+```{r }
 
 head(df)
 
 ```
 
 
-```{r Bank Data}
+```{r }
 
 str(df)
 
 ```
 
-```{r Bank Data}
+```{r}
 
 summary(df)
 
 ```
 
-```{r Bank Data}
+```{r }
 
 df2 <- df |> 
   mutate(job = factor(job),
@@ -115,24 +115,24 @@ df2 <- df |>
 
 ```
 
-```{r Bank Data}
+```{r }
 
 str(df2)
 
 ```
 
-```{r Bank Data}
+```{r }
 
 summary(df2)
 
 ```
-```{r Bank Data}
+```{r }
 
 anyNA(df2)
 
 ```
 
-```{r Bank Data}
+```{r }
 
 df2 <- df2 |> 
   mutate(age= cut(age, breaks = c(20, 30, 40, 50, 60, 70, 100),
@@ -142,14 +142,14 @@ df2 <- df2 |>
 
 ```
 
-```{r Bank Data}
+```{r }
 
 summary(df2)
 
 ```
 
 
-```{r Bank Data}
+```{r }
 
 df2_num <- dplyr::select_if(df2, is.numeric)
 matrix = cor(df2_num)
@@ -163,7 +163,7 @@ corrplot(matrix, method = c("number"))
 
 
 
-```{r Bank Data}
+```{r }
 
 corrplot::corrplot(matrix, method = "circle")
 
@@ -174,7 +174,7 @@ corrplot::corrplot(matrix, method = "circle")
 
 
 
-```{r Bank Data}
+```{r }
 
 lm_model <- lm(y ~ ., data = df2)
 
@@ -199,9 +199,9 @@ alias(lm_model)
 
 
 
-```{r Bank Data}
-vif_values <- car::vif(lm_model)
-print(vif_values)
+```{r }
+#vif_values <- car::vif(lm_model)
+#print(vif_values)
 
 
 ```
