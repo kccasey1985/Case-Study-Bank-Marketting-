@@ -179,6 +179,25 @@ corrplot::corrplot(matrix, method = "circle")
 lm_model <- lm(y ~ ., data = df2)
 
 ```
+```{r}
+
+# Make sure y is a factor with two levels
+df2$y <- factor(df2$y, levels = c("no", "yes"))
+
+# Logistic regression
+logit_model <- glm(y ~ ., data = df2, family = binomial)
+
+summary(logit_model)
+
+```
+```{r}
+alias(lm_model)
+
+```
+
+`
+
+
 
 ```{r Bank Data}
 vif_values <- car::vif(lm_model)
