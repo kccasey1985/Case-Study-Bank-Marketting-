@@ -58,6 +58,7 @@ library(Hmisc)
 library(tibble)
 library(knitr)
 library(here)
+library(ROCR)
 ```
 
 Import Data
@@ -204,6 +205,107 @@ alias(lm_model)
 #print(vif_values)
 
 
+```
+
+```{r}
+#LDA
+
+# Ensure clean data for both models
+df_clean <- df2[complete.cases(df2), ]
+
+# Train logistic model (already done earlier, so skip if done)
+# logit_model <- glm(y ~ ., data = df_clean, family = binomial)
+
+# Train LDA model
+library(MASS)
+lda_model <- lda(y ~ ., data = df_clean)
+
+summary(lda_model)
+
+```
+```{r}
+
+# Predict probabilities
+logit_probs <- predict(logit_model, newdata = df_clean, type = "response")
+logit_pred <- prediction(logit_probs, df_clean$y)
+logit_perf <- performance(logit_pred, "tpr", "fpr")
+
+# Plot ROC
+plot(logit_perf, col = "blue", lwd = 2,
+     main = "ROC Curve: Logistic Regression")
+abline(a = 0, b = 1, lty = 2, col = "gray")
+
+# AUC
+logit_auc <- performance(logit_pred, "auc")@y.values[[1]]
+print(paste("Logistic Regression AUC:", round(logit_auc, 4)))
+```
+
+```{r}
+# Predict probabilities from LDA
+lda_pred <- predict(lda_model, newdata = df_clean)
+lda_probs <- lda_pred$posterior[, 2]
+
+# ROC and AUC for LDA
+lda_roc <- prediction(lda_probs, df_clean$y)
+lda_perf <- performance(lda_roc, "tpr", "fpr")
+
+# Plot ROC
+plot(lda_perf, col = "red", lwd = 2,
+     main = "ROC Curve: Linear Discriminant Analysis")
+abline(a = 0, b = 1, lty = 2, col = "gray")
+
+# AUC
+lda_auc <- performance(lda_roc, "auc")@y.values[[1]]
+print(paste("LDA AUC:", round(lda_auc, 4)))
+
+```
+```{r}
+# Create a data frame with model performance
+model_summary <- data.frame(
+  Model = c("Logistic Regression", "LDA"),
+  AUC = c(round(logit_auc, 4), round(lda_auc, 4))
+)
+
+# Display the table nicely
+knitr::kable(model_summary, caption = "Model Performance Summary (AUC)")
+
+```
+```{r}
+# Logistic predicted classes
+logit_pred_class <- ifelse(predict(logit_model, newdata = df_clean, type = "response") > 0.5, "yes", "no")
+
+# LDA predicted classes
+lda_pred_class <- predict(lda_model, newdata = df_clean)$class
+
+```
+
+```{r}
+# Load required package
+library(caret)
+
+# Convert actual target
+actual <- df_clean$y
+
+# Confusion matrices
+logit_cm <- confusionMatrix(factor(logit_pred_class, levels = c("no", "yes")), actual, positive = "yes")
+lda_cm   <- confusionMatrix(factor(lda_pred_class, levels = c("no", "yes")), actual, positive = "yes")
+print(logit_cm)
+```
+```{r}
+# Get metrics from confusion matrix
+logit_metrics <- logit_cm$byClass
+lda_metrics   <- lda_cm$byClass
+
+# Combine into table
+model_metrics <- data.frame(
+  Model       = c("Logistic Regression", "LDA"),
+  Accuracy    = c(logit_cm$overall["Accuracy"], lda_cm$overall["Accuracy"]),
+  Sensitivity = c(logit_metrics["Sensitivity"], lda_metrics["Sensitivity"]),
+  Specificity = c(logit_metrics["Specificity"], lda_metrics["Specificity"]),
+  AUC         = c(round(logit_auc, 4), round(lda_auc, 4))
+)
+# Display the table nicely
+knitr::kable(model_metrics, caption = "Model Performance Metrics")
 ```
 
 
