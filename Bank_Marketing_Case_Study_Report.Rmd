@@ -135,11 +135,10 @@ anyNA(df2)
 
 ```{r }
 
-df2 <- df2 |> 
-  mutate(age= cut(age, breaks = c(20, 30, 40, 50, 60, 70, 100),
+df2 <- df2 |> mutate(age= cut(age, breaks = c(20, 30, 40, 50, 60, 70, 100),
                          labels = c("21-30", "31-40", "41-50", "51-60", "61-70", "71+"),
                          right = F))|>
-  select(-duration)
+            select(-duration)
 
 ```
 
@@ -201,9 +200,64 @@ alias(lm_model)
 
 
 ```{r }
-#vif_values <- car::vif(lm_model)
-#print(vif_values)
 
+vif_values <- car::vif(lm_model)
+
+print(vif_values)
+
+
+```
+```{r}
+
+#remove factors with greater than 0.875 correlation with other factors
+
+df3 <- subset(df2, select = -c(emp.var.rate,cons.price.idx,euribor3m,nr.employed))
+
+
+df3
+
+```
+
+```{r}
+#redo correction matrix with removed factors with greater than 0.875 correlation with other factors
+df3_num <- dplyr::select_if(df3, is.numeric)
+matrix2 = cor(df3_num)
+corrplot(matrix2, method = c("number")) 
+
+
+```
+
+
+
+```{r}
+
+# Logistic regression with df3
+
+lm_model_2 <- lm(y ~ . , data = df3)
+
+```
+
+
+```{r}
+
+logit_model2 <- glm(y ~ ., data = df3, family = binomial)
+
+summary(logit_model2)
+
+
+
+
+```
+
+```{r}
+
+# Make sure y is a factor with two levels
+df3$y <- factor(df3$y, levels = c("no", "yes"))
+
+# Logistic regression
+logit_model <- glm(y ~ ., data = df3, family = binomial)
+
+summary(logit_model)
 
 ```
 
@@ -211,7 +265,7 @@ alias(lm_model)
 #LDA
 
 # Ensure clean data for both models
-df_clean <- df2[complete.cases(df2), ]
+df_clean <- df3[complete.cases(df3), ]
 
 # Train logistic model (already done earlier, so skip if done)
 # logit_model <- glm(y ~ ., data = df_clean, family = binomial)
@@ -223,6 +277,7 @@ lda_model <- lda(y ~ ., data = df_clean)
 summary(lda_model)
 
 ```
+
 ```{r}
 
 # Predict probabilities
