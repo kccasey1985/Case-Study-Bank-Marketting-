@@ -201,9 +201,9 @@ alias(lm_model)
 
 ```{r }
 
-vif_values <- car::vif(lm_model)
+#vif_values <- car::vif(lm_model)
 
-print(vif_values)
+#print(vif_values)
 
 
 ```
