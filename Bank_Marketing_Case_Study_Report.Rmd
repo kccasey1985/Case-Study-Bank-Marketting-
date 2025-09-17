@@ -360,7 +360,7 @@ knitr::kable(model_metrics, caption = "Model Performance Metrics")
 ```
 
 ```{r}
-```{r}
+
 # Correlation 
 df2_num <- dplyr::select_if(df2, is.numeric)
 matrix = cor(df2_num)
@@ -369,8 +369,8 @@ corrplot(matrix, method = c("number"))
 # 4. Train/Test Split
 
 # Balanced dataset
-df2_yes = dplyr::filter(df2, Campaign_Response == 1)
-df2_no = dplyr::filter(df2, Campaign_Response == 0)
+df2_yes = dplyr::filter(df2, y == 1)
+df2_no = dplyr::filter(df2, y == 0)
 df2_random = sample_n(df2_no, dim(df2_yes)[1])
 # This is from when we saw the unbalance in the histogram earlier
 df2_balance = rbind(df2_yes, df2_no_random)
@@ -379,18 +379,18 @@ df2_balance = rbind(df2_yes, df2_no_random)
 set.seed(123)
 
 # Unbalanced
-train_index <- createDataPartition(df2$Campaign_Response, p = 0.7, list = F) 
+train_index <- createDataPartition(df2$y, p = 0.7, list = F) 
 train <- df[train_index,]
 test <- df[-train_index,]
 
 # Balanced
-train_index_balance <- createDataPartition(df2$Campaign_Response, p = 0.7, list = F) 
+train_index_balance <- createDataPartition(df2$y, p = 0.7, list = F) 
 train_balance <- df[train_index_balance,]
 test_balance <- df[-train_index_balance,]
 
 # 5. Logistic Regression
 
-formula_lr <- Campaign_Response ~ Age_Group + Log_Income + Account_Balance + Credit_Score + Transactions_Per_Month + Loan_Repayment_Status + Digital_Banking_Usage + Gender + Marital_Status
+formula_lr <- y ~ age + job + marital + education + default + housing + loan + contact + month + day_of_week + poutcome + emp.var.rate + cons.price.idx + cons.conf.idx + euribor3m + nr.employed
 lr_model <- glm(formula_lr, data = train, family = binomial)
 lt_model_balance <- glm(formula_lr, data = train_balance, family = binomial) 
 
@@ -555,6 +555,5 @@ print(list(Logistic = roi_lr,
            BalancedTree = roi_tree_bal,
            RF = roi_rf, 
            BalancedRF = roi_rf_bal))
-```
 ```
 
