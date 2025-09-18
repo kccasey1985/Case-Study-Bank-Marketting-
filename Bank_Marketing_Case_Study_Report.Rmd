@@ -70,20 +70,6 @@ df <- fread(data_path, sep = ";") |> as_tibble()
 glimpse(df)
 ```
 
-```{r}
-opts_knit$set(root.dir = here())
-
-# load the dataset
-df <- fread(here("bank-additional-full.csv"), sep = ";") |> as_tibble()
-glimpse(df)
-```
-
-### View Data
-
-```{r }
-head(df)
-```
-
 ```{r }
 str(df)
 ```
@@ -95,112 +81,83 @@ summary(df)
 ### Data Cleaning
 
 ```{r }
-df2 <- df |> 
-  mutate(job = factor(job),
-         marital  = factor(marital),
-         education  = factor(education),
-         default  = factor(default),
-         loan  = factor(loan),
-         contact  = factor(contact),
-         month   = factor(month),
-         day_of_week  = factor(day_of_week),
-         poutcome    = factor(poutcome),
-         y   = factor(y),
-         housing  = factor(housing))
+df2 <- df |>
+  mutate(
+    job         = factor(job),
+    marital     = factor(marital),
+    education   = factor(education),
+    default     = factor(default),
+    loan        = factor(loan),
+    contact     = factor(contact),
+    month       = factor(month),
+    day_of_week = factor(day_of_week),
+    poutcome    = factor(poutcome),
+    y           = factor(y),       
+    housing     = factor(housing)
+  )
 ```
 
 ```{r }
-
 str(df2)
-
 ```
 
 ```{r }
-
 summary(df2)
-
 ```
 
 ```{r }
-
 anyNA(df2)
-
-```
-
-
-```{r }
-df2 <- df2 |> mutate(age= cut(age, breaks = c(20, 30, 40, 50, 60, 70, 100),
-                         labels = c("21-30", "31-40", "41-50", "51-60", "61-70", "71+"),
-                         right = F))|>
-            select(-duration)
 ```
 
 ```{r }
+df2 <- df2 |>
+  mutate(
+    y = factor(y, levels = c("no","yes")),
+    age = cut(age,
+              breaks = c(20, 30, 40, 50, 60, 70, 100),
+              labels = c("21-30", "31-40", "41-50", "51-60", "61-70", "71+"),
+              right = FALSE)
+  ) |>
+  select(-duration)
+```
 
+```{r }
 summary(df2)
-
 ```
 
 ### Correlation Matrix
 
 ```{r }
 df2_num <- dplyr::select_if(df2, is.numeric)
-matrix = cor(df2_num)
-corrplot(matrix, method = c("number")) 
+if (ncol(df2_num) > 1) {
+  matrix <- cor(df2_num)
+  corrplot(matrix, method = "number")
+}
 ```
+
+```{r}
+# --- Remove highly correlated macro vars (as you did before) ---
+# These are common to drop for this dataset due to multicollinearity
+drop_cols <- c("emp.var.rate","cons.price.idx","euribor3m","nr.employed")
+drop_cols <- intersect(drop_cols, names(df2))
+df3 <- subset(df2, select = setdiff(names(df2), drop_cols))
+```
+
 
 ### Models
 
 #### Logistic Regression
 
 ```{r}
-
-# Make sure y is a factor with two levels
-df2$y <- factor(df2$y, levels = c("no", "yes"))
-
-# Logistic regression
 logit_model <- glm(y ~ ., data = df2, family = binomial)
-
-summary(logit_model)
-
-```
-
-```{r}
-#remove factors with greater than 0.75 correlation with other factors
-
-df3 <- subset(df2, select = -c(emp.var.rate,cons.price.idx,euribor3m,nr.employed))
-
-df3
-```
-
-```{r}
-df3_num <- dplyr::select_if(df3, is.numeric)
-matrix2 = cor(df3_num)
-corrplot(matrix2, method = c("number")) 
-```
-
-```{r}
-# Make sure y is a factor with two levels
-df3$y <- factor(df3$y, levels = c("no", "yes"))
-
-# Logistic regression
-logit_model <- glm(y ~ ., data = df3, family = binomial)
-
 summary(logit_model)
 ```
 
 #### LDA
 
 ```{r}
-# LDA
-
-# Ensure clean data for both models
 df_clean <- df3[complete.cases(df3), ]
-
-# Train LDA model
-library(MASS)
 lda_model <- lda(y ~ ., data = df_clean)
-
 summary(lda_model)
 ```
 
@@ -209,260 +166,122 @@ summary(lda_model)
 #### Logistic Regression
 
 ```{r}
-# Predict probabilities
 logit_probs <- predict(logit_model, newdata = df_clean, type = "response")
-logit_pred <- prediction(logit_probs, df_clean$y)
-logit_perf <- performance(logit_pred, "tpr", "fpr")
-
-# Plot ROC
-plot(logit_perf, col = "blue", lwd = 2,
-     main = "ROC Curve: Logistic Regression")
-abline(a = 0, b = 1, lty = 2, col = "gray")
-
-# AUC
-logit_auc <- performance(logit_pred, "auc")@y.values[[1]]
-print(paste("Logistic Regression AUC:", round(logit_auc, 4)))
+roc_logit <- pROC::roc(df_clean$y, logit_probs, levels = c("no","yes"))
+logit_auc <- as.numeric(roc_logit$auc)
 ```
 
 #### LDA
 
 ```{r}
-# Predict probabilities from LDA
-lda_pred <- predict(lda_model, newdata = df_clean)
-lda_probs <- lda_pred$posterior[, 2]
-
-# ROC and AUC for LDA
-lda_roc <- prediction(lda_probs, df_clean$y)
-lda_perf <- performance(lda_roc, "tpr", "fpr")
-
-# Plot ROC
-plot(lda_perf, col = "red", lwd = 2,
-     main = "ROC Curve: Linear Discriminant Analysis")
-abline(a = 0, b = 1, lty = 2, col = "gray")
-
-# AUC
-lda_auc <- performance(lda_roc, "auc")@y.values[[1]]
-print(paste("LDA AUC:", round(lda_auc, 4)))
-
+lda_probs <- predict(lda_model, newdata = df_clean)$posterior[, "yes"]
+roc_lda <- pROC::roc(df_clean$y, lda_probs, levels = c("no","yes"))
+lda_auc <- as.numeric(roc_lda$auc)
 ```
 
 ### Comparison Table
 
 ```{r}
-# Create a data frame with model performance
 model_summary <- data.frame(
   Model = c("Logistic Regression", "LDA"),
   AUC = c(round(logit_auc, 4), round(lda_auc, 4))
 )
-
-# Display the table nicely
-knitr::kable(model_summary, caption = "Model Performance Summary (AUC)")
-```
-
-
-
-```{r}
-# Logistic predicted classes
-logit_pred_class <- ifelse(predict(logit_model, newdata = df_clean, type = "response") > 0.5, "yes", "no")
-
-# LDA predicted classes
-lda_pred_class <- predict(lda_model, newdata = df_clean)$class
-```
-
-```{r}
-# Load required package
-library(caret)
-
-# Convert actual target
-actual <- df_clean$y
-
-# Confusion matrices
-logit_cm <- confusionMatrix(factor(logit_pred_class, levels = c("no", "yes")), actual, positive = "yes")
-lda_cm   <- confusionMatrix(factor(lda_pred_class, levels = c("no", "yes")), actual, positive = "yes")
-```
-
-```{r}
-# Get metrics from confusion matrix
-logit_metrics <- logit_cm$byClass
-lda_metrics   <- lda_cm$byClass
-
-# Combine into table
-model_metrics <- data.frame(
-  Model       = c("Logistic Regression", "LDA"),
-  Accuracy    = c(logit_cm$overall["Accuracy"], lda_cm$overall["Accuracy"]),
-  Sensitivity = c(logit_metrics["Sensitivity"], lda_metrics["Sensitivity"]),
-  Specificity = c(logit_metrics["Specificity"], lda_metrics["Specificity"]),
-  AUC         = c(round(logit_auc, 4), round(lda_auc, 4))
-)
-# Display the table nicely
-knitr::kable(model_metrics, caption = "Model Performance Metrics")
+knitr::kable(model_summary, caption = "Model Performance Summary (All df3, Unbalanced)")
 ```
 
 ### Balance the Data
 
 ```{r}
-# 4. Train/Test Split
+# Train/Test Split
 
 # Balanced dataset
-df3_yes = dplyr::filter(df3, y == 1)
-df3_no = dplyr::filter(df3, y == 0)
-df3_random = sample_n(df3_no, dim(df3_yes)[1])
-# This is from when we saw the unbalance in the histogram earlier
-#df2_balance = rbind(df2_yes, df2_no_random)
-
-# Set seed
-set.seed(123)
-
-# Balanced
-train_index <- createDataPartition(df3$y, p = 0.7, list = F) 
-train <- df[train_index,]
-test <- df[-train_index,]
-
-# 5. Logistic Regression
-formula_lr <- y ~ age + job + marital + education + default + housing + loan + contact + month + day_of_week + poutcome + cons.conf.idx
-lr_model <- glm(formula_lr, data = train, family = binomial)
-
-summary(lr_model)
-
-vif(lr_model)
-
-# Balanced predictions
-test$prob_lr <- predict(lr_model, newdata = test, type = "response")  
-test$pred_lr <- ifelse(test$prob_lr > 0.5, "1", "0") |>
-  factor(levels = c("0", "1"))
-
-# AUC & Confusion Matrix
-
-# Balanced
-roc_lr <- roc(as.numeric(as.character(test$y, test$prob_lr)))
-auc_lr <- roc_lr$auc
-print(paste("Logistic Regression AUC: ", auc_lr))
-print(ConfusionMatrix(test$pred_lr, test$y, positive = "1"))
-
-# 6. Decision Tree
-
-formula_ml <- y ~ age + job + marital + education + default + housing + loan + contact + month + day_of_week + poutcome + cons.conf.idx
-tree_model <- glm(formula_lr, data = train, family = "class")
-
-rpart.plot(tree_model, main = "Decision Tree")
-
-# Balanced predictions
-test_balance$prob_tree <- predict(tree_model_balance, newdata = test)[, "1"]
-test_balance$pred_tree <- ifelse(test_balance$prob_tree > 0.5, "1", "0") |>
-  factor(levels = c("0", "1"))
-
-# AUC & Confusion Matrix
-# Unbalanced
-roc_tree <- roc(as.numeric(as.character(test$Campaign_Response, test$prob_tree)))
-auc_tree <- roc_tree$auc
-print(paste("Logistic Regression AUC: ", auc_tree))
-print(ConfusionMatrix(test$pred_tree, test$Campaign_Response, positive = "1"))
-
-# Balanced
-roc_tree_balance <- roc(as.numeric(as.character(test$Campaign_Response, test_balance$prob_tree)))
-auc_tree_balance <- roc_tree_balance$auc
-print(paste("Logistic Regression AUC: ", auc_tree))
-print(ConfusionMatrix(test_balance$pred_tree, test_balance$Campaign_Response, positive = "1"))
-
-# 7. Random Forest
+df3_yes <- dplyr::filter(df3, y == "yes")
+df3_no  <- dplyr::filter(df3, y == "no")
+df3_no_random <- sample_n(df3_no, nrow(df3_yes))
+df3_bal <- rbind(df3_yes, df3_no_random)
 
 # Unbalanced
-rf_model <- randomForest(x = model.matrix(formula_ml, data = train)[, -1],
-                         y = train$Campaign_Response,
-                         ntree = 150,
-                         mtry = floor(sqrt(length(all.vars(formula_ml)))),
-                         nodesize = 50,
-                         importance = T)
-varImpPlot(rf_model, main = "Random Forest")
+train_index <- createDataPartition(df3$y, p = 0.7, list = FALSE)
+train_unbal <- df3[train_index, ]
+test_unbal  <- df3[-train_index, ]
 
 # Balanced
-rf_model_balance <- randomForest(x = model.matrix(formula_ml, data = train_balance)[, -1],
-                                 y = train_balance$Campaign_Response,
-                                 ntree = 150,
-                                 mtry = floor(sqrt(length(all.vars(formula_ml)))),
-                                 nodesize = 50,
-                                 importance = T)
-varImpPlot(rf_model_balance, main = "Random Forest")
+train_index_bal <- createDataPartition(df3_bal$y, p = 0.7, list = FALSE)
+train_bal <- df3_bal[train_index_bal, ]
+test_bal  <- df3_bal[-train_index_bal, ]
 
-# Unbalanced predictions
-test_rf <- model.matrix(formula_ml, data = test)[, -1]
-test$prob_rf <- predict(rf_model, newdata = test_rf, type = "prob")[, "1"]
-test$pred_rf <- ifelse(test$prob_rf > 0.5, "1", "0") |>
-  factor(levels = c("0", "1"))
+formula <- y ~ age + job + marital + education + default + housing + loan +
+  contact + month + day_of_week + poutcome + campaign + pdays + previous +
+  cons.conf.idx
 
-# Balanced predictions
-test_rf_balance <- model.matrix(formula_ml, data = test_balance)[, -1]
-test$prob_rf_balance <- predict(rf_model_balance, newdata = test_rf_balance, type = "prob")[, "1"]
-test$pred_rf_balance <- ifelse(test_balance$prob_rf_balance > 0.5, "1", "0") |>
-  factor(levels = c("0", "1"))
-
-# AUC & Confusion Matrix
-# Unbalanced
-roc_rf <- roc(as.numeric(as.character(test$Campaign_Response, test$prob_rf)))
-auc_rf <- roc_rf$auc
-print(paste("Logistic Regression AUC: ", auc_rf))
-print(ConfusionMatrix(test$pred_rf, test$Campaign_Response, positive = "1"))
-
-# Balanced
-roc_rf_balance <- roc(as.numeric(as.character(test$Campaign_Response, test_balance$prob_rf_balance)))
-auc_rf_balance <- roc_rf_balance$auc
-print(paste("Logistic Regression AUC: ", auc_rf_balance))
-print(ConfusionMatrix(test_balance$pred_rf_balance, test_balance$Campaign_Response, positive = "1"))
-
-# 8. ROI Simulation
-
-cost_per_contact <- 5
-revenue_per_conversion <- 250
-
-simulate_roi <- function(df_probs, prob_col = "prob"){
-  n_total <- nrow(df_probs)
-  
-  # Mass marketing
-  mass_contacts <- n_total
-  mass_conversions <- sum(as.numeric(as.character(df_probs$Campaign_Response)))
-  mass_cost <- mass_contacts * cost_per_contact
-  mass_revenue <- mass_conversions * revenue_per_conversion
-  mass_roi <- (mass_revenue - mass_cost) / mass_cost
-  
-  # Top 20%
-  top20_n <- ceiling(0.20 * n_total)
-  top20 <- df_probs %>% arrange(desc(.data[[prob_col]])) %>% slice(1:top20_n)
-  top20_conversions <- sum(as.numeric(as.character(top20$Campaign_Response)))
-  top20_cost <- top20_n * cost_per_contact
-  top20_revenue <- top20_conversions * revenue_per_conversion
-  top20_roi <- (top20_revenue - top20_cost) / top20_cost
-  
-  # Top 10%
-  top10_n <- ceiling(0.10 * n_total)
-  top10 <- df_probs %>% arrange(desc(.data[[prob_col]])) %>% slice(1:top10_n)
-  top10_conversions <- sum(as.numeric(as.character(top10$Campaign_Response)))
-  top10_cost <- top10_n * cost_per_contact
-  top10_revenue <- top10_conversions * revenue_per_conversion
-  top10_roi <- (top10_revenue - top10_cost) / top10_cost
-  
-  tibble(scenario = c("Mass (all)", "Target top 20%", "Target top 10%"),
-         contacts = c(mass_contacts, top20_n, top10_n),
-         conversions = c(mass_conversions, top20_conversions, top10_conversions),
-         cost = c(mass_cost, top20_cost, top10_cost),
-         revenue = c(mass_revenue, top20_revenue, top10_revenue),
-         ROI = c(as.numeric(mass_roi), as.numeric(top20_roi), as.numeric(top10_roi)))
+# Model fit
+fit_models <- function(train_df) {
+  list(
+    lr   = glm(formula, data = train_df, family = binomial),
+    tree = rpart(formula, data = train_df, method = "class",
+                 control = rpart.control(cp = 0.001, minbucket = 50)),
+    rf   = randomForest(form, data = train_df,
+                        ntree = 300,
+                        mtry  = floor(sqrt(length(all.vars(form)) - 1)),
+                        nodesize = 25,
+                        importance = TRUE)
+  )
 }
 
-roi_lr <- simulate_roi(test |> rename(prob = prob_lr))
-roi_lr_bal <- simulate_roi(test_bal |> rename(prob = prob_lr))
+# Predict Probabilities
+predict_probs <- function(models, newdata) {
+  tibble(
+    prob_lr   = as.numeric(predict(models$lr,   newdata = newdata, type = "response")),
+    prob_tree = as.numeric(predict(models$tree, newdata = newdata, type = "prob")[, "yes"]),
+    prob_rf   = as.numeric(predict(models$rf,   newdata = newdata, type = "prob")[, "yes"])
+  )
+}
 
-roi_tree <- simulate_roi(test |> rename(prob = prob_tree))
-roi_tree_bal <- simulate_roi(test_bal |> rename(prob = prob_tree))
+# Evaluate
+evaluate_probs <- function(actual, probs_tbl, threshold = 0.5, label = "") {
+  stopifnot(is.factor(actual), all(levels(actual) == c("no","yes")))
+  name_map <- c(prob_lr = "Logistic Regression", prob_tree = "Decision Tree", prob_rf = "Random Forest")
+  purrr::map2_dfr(names(probs_tbl), probs_tbl, function(name, p) {
+    pred <- factor(ifelse(p > threshold, "yes", "no"), levels = c("no","yes"))
+    roc_obj <- pROC::roc(response = actual, predictor = p, levels = c("no","yes"))
+    cm <- caret::confusionMatrix(pred, actual, positive = "yes")
+    tibble(
+      Set         = label,
+      Model       = name_map[[name]],
+      AUC         = as.numeric(roc_obj$auc),
+      Accuracy    = as.numeric(cm$overall["Accuracy"]),
+      Sensitivity = as.numeric(cm$byClass["Sensitivity"]),
+      Specificity = as.numeric(cm$byClass["Specificity"])
+    )
+  })
+}
 
-roi_rf <- simulate_roi(test |> rename(prob = prob_rf))
-roi_rf_bal <- simulate_roi(test_bal |> rename(prob = prob_rf))
+models_unbal <- fit_models(train_unbal)
+models_bal   <- fit_models(train_bal)
 
+probs_unbal_on_unbal <- predict_probs(models_unbal, test_unbal)
+probs_bal_on_unbal   <- predict_probs(models_bal,   test_unbal)
 
-print(list(Logistic = roi_lr, 
-           BalancedLogistic = roi_lr_bal,
-           Tree = roi_tree, 
-           BalancedTree = roi_tree_bal,
-           RF = roi_rf, 
-           BalancedRF = roi_rf_bal))
+probs_unbal_on_bal   <- predict_probs(models_unbal, test_bal)
+probs_bal_on_bal     <- predict_probs(models_bal,   test_bal)
+
+# Evaluate (AUC, Accuracy, Sensitivity, Specificity)
+eval_unbal_on_unbal <- evaluate_probs(test_unbal$y, probs_unbal_on_unbal, 0.5, "UnbalTrain → UnbalTest")
+eval_bal_on_unbal   <- evaluate_probs(test_unbal$y, probs_bal_on_unbal,   0.5, "BalTrain → UnbalTest")
+
+eval_unbal_on_bal   <- evaluate_probs(test_bal$y,   probs_unbal_on_bal,   0.5, "UnbalTrain → BalTest")
+eval_bal_on_bal     <- evaluate_probs(test_bal$y,   probs_bal_on_bal,     0.5, "BalTrain → BalTest")
+
+perf_all <- bind_rows(
+  eval_unbal_on_unbal,
+  eval_bal_on_unbal,
+  eval_unbal_on_bal,
+  eval_bal_on_bal
+)
+
+knitr::kable(perf_all %>% arrange(desc(AUC)),
+             digits = 4,
+             caption = "Mirrored Performance: Unbalanced vs Balanced (Train/Test)")
+
 ```
 
