@@ -361,10 +361,6 @@ knitr::kable(model_metrics, caption = "Model Performance Metrics")
 
 ```{r}
 
-# Correlation 
-df2_num <- dplyr::select_if(df2, is.numeric)
-matrix = cor(df2_num)
-corrplot(matrix, method = c("number")) 
 
 # 4. Train/Test Split
 
@@ -373,7 +369,7 @@ df2_yes = dplyr::filter(df2, y == 1)
 df2_no = dplyr::filter(df2, y == 0)
 df2_random = sample_n(df2_no, dim(df2_yes)[1])
 # This is from when we saw the unbalance in the histogram earlier
-df2_balance = rbind(df2_yes, df2_no_random)
+#df2_balance = rbind(df2_yes, df2_no_random)
 
 # Set seed
 set.seed(123)
