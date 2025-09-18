@@ -43,7 +43,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 #____________________________________________________________________________
 
-Load Libraries
+### Load Libraries
 
 ```{r Libraries}
 library(MASS) 
@@ -61,7 +61,7 @@ library(here)
 library(ROCR)
 ```
 
-Import Data
+### Import Data
 
 ```{r}
 data_path <- "https://raw.githubusercontent.com/kccasey1985/Case-Study-Bank-Marketting-/main/bank-additional-full.csv"
@@ -69,6 +69,7 @@ data_path <- "https://raw.githubusercontent.com/kccasey1985/Case-Study-Bank-Mark
 df <- fread(data_path, sep = ";") |> as_tibble()
 glimpse(df)
 ```
+
 ```{r}
 opts_knit$set(root.dir = here())
 
@@ -77,28 +78,23 @@ df <- fread(here("bank-additional-full.csv"), sep = ";") |> as_tibble()
 glimpse(df)
 ```
 
+### View Data
 
 ```{r }
-
 head(df)
-
 ```
 
-
 ```{r }
-
 str(df)
-
 ```
 
 ```{r}
-
 summary(df)
-
 ```
 
-```{r }
+### Data Cleaning
 
+```{r }
 df2 <- df |> 
   mutate(job = factor(job),
          marital  = factor(marital),
@@ -111,9 +107,6 @@ df2 <- df |>
          poutcome    = factor(poutcome),
          y   = factor(y),
          housing  = factor(housing))
-
-
-
 ```
 
 ```{r }
@@ -127,6 +120,7 @@ str(df2)
 summary(df2)
 
 ```
+
 ```{r }
 
 anyNA(df2)
@@ -135,12 +129,10 @@ anyNA(df2)
 
 
 ```{r }
-
 df2 <- df2 |> mutate(age= cut(age, breaks = c(20, 30, 40, 50, 60, 70, 100),
                          labels = c("21-30", "31-40", "41-50", "51-60", "61-70", "71+"),
                          right = F))|>
             select(-duration)
-
 ```
 
 ```{r }
@@ -149,37 +141,18 @@ summary(df2)
 
 ```
 
+### Correlation Matrix
 
 ```{r }
-
 df2_num <- dplyr::select_if(df2, is.numeric)
 matrix = cor(df2_num)
 corrplot(matrix, method = c("number")) 
-
 ```
 
+### Models
 
+#### Logistic Regression
 
-
-
-
-
-```{r }
-
-corrplot::corrplot(matrix, method = "circle")
-
-
-```
-
-
-
-
-
-```{r }
-
-#lm_model <- lm(y ~ ., data = df2)a2  
-
-```
 ```{r}
 
 # Make sure y is a factor with two levels
@@ -191,62 +164,22 @@ logit_model <- glm(y ~ ., data = df2, family = binomial)
 summary(logit_model)
 
 ```
-```{r}
-#alias(lm_model)
-
-```
-
-
-```{r }
-
-#vif_values <- car::vif(logistic)
-
-#print(vif_values)
-
-
-```
 
 ```{r}
-
-#remove factors with greater than 0.875 correlation with other factors
+#remove factors with greater than 0.75 correlation with other factors
 
 df3 <- subset(df2, select = -c(emp.var.rate,cons.price.idx,euribor3m,nr.employed))
 
-
 df3
-
 ```
 
 ```{r}
-
 df3_num <- dplyr::select_if(df3, is.numeric)
 matrix2 = cor(df3_num)
 corrplot(matrix2, method = c("number")) 
-
-
-```
-
-
-
-```{r}
-
-# Logistic regression with df3
-
-lm_model_2 <- lm(y ~ . , data = df3)
-
-```
-
-
-```{r}
-
-logit_model2 <- glm(y ~ ., data = df3, family = binomial)
-
-summary(logit_model2)
-
 ```
 
 ```{r}
-
 # Make sure y is a factor with two levels
 df3$y <- factor(df3$y, levels = c("no", "yes"))
 
@@ -254,28 +187,28 @@ df3$y <- factor(df3$y, levels = c("no", "yes"))
 logit_model <- glm(y ~ ., data = df3, family = binomial)
 
 summary(logit_model)
-
 ```
 
+#### LDA
+
 ```{r}
-#LDA
+# LDA
 
 # Ensure clean data for both models
 df_clean <- df3[complete.cases(df3), ]
-
-# Train logistic model (already done earlier, so skip if done)
-# logit_model <- glm(y ~ ., data = df_clean, family = binomial)
 
 # Train LDA model
 library(MASS)
 lda_model <- lda(y ~ ., data = df_clean)
 
 summary(lda_model)
-
 ```
 
-```{r}
+### Predictions / AUC
 
+#### Logistic Regression
+
+```{r}
 # Predict probabilities
 logit_probs <- predict(logit_model, newdata = df_clean, type = "response")
 logit_pred <- prediction(logit_probs, df_clean$y)
@@ -290,6 +223,8 @@ abline(a = 0, b = 1, lty = 2, col = "gray")
 logit_auc <- performance(logit_pred, "auc")@y.values[[1]]
 print(paste("Logistic Regression AUC:", round(logit_auc, 4)))
 ```
+
+#### LDA
 
 ```{r}
 # Predict probabilities from LDA
@@ -310,6 +245,9 @@ lda_auc <- performance(lda_roc, "auc")@y.values[[1]]
 print(paste("LDA AUC:", round(lda_auc, 4)))
 
 ```
+
+### Comparison Table
+
 ```{r}
 # Create a data frame with model performance
 model_summary <- data.frame(
@@ -319,15 +257,16 @@ model_summary <- data.frame(
 
 # Display the table nicely
 knitr::kable(model_summary, caption = "Model Performance Summary (AUC)")
-
 ```
+
+
+
 ```{r}
 # Logistic predicted classes
 logit_pred_class <- ifelse(predict(logit_model, newdata = df_clean, type = "response") > 0.5, "yes", "no")
 
 # LDA predicted classes
 lda_pred_class <- predict(lda_model, newdata = df_clean)$class
-
 ```
 
 ```{r}
@@ -340,8 +279,8 @@ actual <- df_clean$y
 # Confusion matrices
 logit_cm <- confusionMatrix(factor(logit_pred_class, levels = c("no", "yes")), actual, positive = "yes")
 lda_cm   <- confusionMatrix(factor(lda_pred_class, levels = c("no", "yes")), actual, positive = "yes")
-print(logit_cm)
 ```
+
 ```{r}
 # Get metrics from confusion matrix
 logit_metrics <- logit_cm$byClass
@@ -359,79 +298,53 @@ model_metrics <- data.frame(
 knitr::kable(model_metrics, caption = "Model Performance Metrics")
 ```
 
+### Balance the Data
+
 ```{r}
-
-
 # 4. Train/Test Split
 
 # Balanced dataset
-df2_yes = dplyr::filter(df2, y == 1)
-df2_no = dplyr::filter(df2, y == 0)
-df2_random = sample_n(df2_no, dim(df2_yes)[1])
+df3_yes = dplyr::filter(df3, y == 1)
+df3_no = dplyr::filter(df3, y == 0)
+df3_random = sample_n(df3_no, dim(df3_yes)[1])
 # This is from when we saw the unbalance in the histogram earlier
 #df2_balance = rbind(df2_yes, df2_no_random)
 
 # Set seed
 set.seed(123)
 
-# Unbalanced
-train_index <- createDataPartition(df2$y, p = 0.7, list = F) 
+# Balanced
+train_index <- createDataPartition(df3$y, p = 0.7, list = F) 
 train <- df[train_index,]
 test <- df[-train_index,]
 
-# Balanced
-train_index_balance <- createDataPartition(df2$y, p = 0.7, list = F) 
-train_balance <- df[train_index_balance,]
-test_balance <- df[-train_index_balance,]
-
 # 5. Logistic Regression
-
-formula_lr <- y ~ age + job + marital + education + default + housing + loan + contact + month + day_of_week + poutcome + emp.var.rate + cons.price.idx + cons.conf.idx + euribor3m + nr.employed
+formula_lr <- y ~ age + job + marital + education + default + housing + loan + contact + month + day_of_week + poutcome + cons.conf.idx
 lr_model <- glm(formula_lr, data = train, family = binomial)
-lt_model_balance <- glm(formula_lr, data = train_balance, family = binomial) 
 
 summary(lr_model)
-summary(lr_model_balance)
 
 vif(lr_model)
-vif(lr_model_balance)
 
-# Unbalanced predictions
-test$prob_lr <- predict(lr_model, newdata = test, type = "response")
+# Balanced predictions
+test$prob_lr <- predict(lr_model, newdata = test, type = "response")  
 test$pred_lr <- ifelse(test$prob_lr > 0.5, "1", "0") |>
   factor(levels = c("0", "1"))
 
-# Balanced predictions
-test_balance$prob_lr <- predict(lr_model_balance, newdata = test_balance, type = "response")  
-test_balance$pred_lr <- ifelse(test_balance$prob_lr > 0.5, "1", "0") |>
-  factor(levels = c("0", "1"))
-
 # AUC & Confusion Matrix
-# Unbalanced
-roc_lr <- roc(as.numeric(as.character(test$Campaign_Response, test$prob_lr)))
-auc_lr <- roc_lr$auc
-print(paste("Logistic Regression AUC: ", auc_lr))
-print(ConfusionMatrix(test$pred_lr, test$Campaign_Response, positive = "1"))
 
 # Balanced
-roc_lr_balance <- roc(as.numeric(as.character(test$Campaign_Response, test$prob_lr)))
-auc_lr_balance <- roc_lr_balance$auc
-print(paste("Logistic Regression AUC: ", auc_lr_balance))
-print(ConfusionMatrix(test_balance$pred_lr, test_balance$Campaign_Response, positive = "1"))
+roc_lr <- roc(as.numeric(as.character(test$y, test$prob_lr)))
+auc_lr <- roc_lr$auc
+print(paste("Logistic Regression AUC: ", auc_lr))
+print(ConfusionMatrix(test$pred_lr, test$y, positive = "1"))
 
 # 6. Decision Tree
 
-formula_ml <- Campaign_Response ~ Age_Group + Log_Income + Account_Balance + Credit_Score + Transactions_Per_Month + Loan_Repayment_Status + Digital_Banking_Usage + Gender + Marital_Status
+formula_ml <- y ~ age + job + marital + education + default + housing + loan + contact + month + day_of_week + poutcome + cons.conf.idx
 tree_model <- glm(formula_lr, data = train, family = "class")
-tree_model_balance <- glm(formula_lr, data = train_balance, family = "class") 
 
 rpart.plot(tree_model, main = "Decision Tree")
-rpart.plot(tree_model_balance, main = "Decision Tree")
-
-# Unbalanced predictions
-test$prob_tree <- predict(tree_model, newdata = test)[, "1"]
-test$pred_tree <- ifelse(test$prob_tree > 0.5, "1", "0") |>
-  factor(levels = c("0", "1"))
 
 # Balanced predictions
 test_balance$prob_tree <- predict(tree_model_balance, newdata = test)[, "1"]
