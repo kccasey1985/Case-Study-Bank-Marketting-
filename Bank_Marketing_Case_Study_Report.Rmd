@@ -52,13 +52,16 @@ library(tidyverse)
 library(corrplot)
 library(car)
 library(GGally)
-library(ROCR)
 library(data.table)
 library(Hmisc)
 library(tibble)
 library(knitr)
 library(here)
 library(ROCR)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
 ```
 
 ### Import Data
@@ -143,13 +146,12 @@ drop_cols <- intersect(drop_cols, names(df2))
 df3 <- subset(df2, select = setdiff(names(df2), drop_cols))
 ```
 
-
 ### Models
 
 #### Logistic Regression
 
 ```{r}
-logit_model <- glm(y ~ ., data = df2, family = binomial)
+logit_model <- glm(y ~ ., data = df3, family = binomial)
 summary(logit_model)
 ```
 
@@ -162,6 +164,50 @@ summary(lda_model)
 ```
 
 ### Predictions / AUC
+
+# Test
+
+```{r predictions-auc, message=FALSE, warning=FALSE}
+# Make sure models use the same columns you'll predict on (df3)
+# If you already fit these earlier on df3, you can skip the re-fit lines.
+
+# 1) Clean data frame for evaluation (no NAs)
+df3_clean <- df3[complete.cases(df3), ]
+
+# 2) Logistic Regression (fit on df3, predict on df3_clean)
+logit_model <- glm(y ~ ., data = df3, family = binomial)
+
+logit_probs <- predict(logit_model, newdata = df3_clean, type = "response")
+roc_logit <- pROC::roc(
+  response  = df3_clean$y,
+  predictor = logit_probs,
+  levels    = c("no","yes"),  # "yes" is the positive class
+  direction = "<"             # higher prob = more likely "yes"
+)
+logit_auc <- as.numeric(roc_logit$auc)
+cat(sprintf("Logistic Regression AUC: %.4f\n", logit_auc))
+
+# 3) LDA (fit & predict on the same consistent columns)
+lda_model <- MASS::lda(y ~ ., data = df3_clean)
+lda_probs <- predict(lda_model, newdata = df3_clean)$posterior[, "yes"]
+roc_lda <- pROC::roc(
+  response  = df3_clean$y,
+  predictor = lda_probs,
+  levels    = c("no","yes"),
+  direction = "<"
+)
+lda_auc <- as.numeric(roc_lda$auc)
+cat(sprintf("LDA AUC: %.4f\n", lda_auc))
+
+# 4) Optional: plot both ROC curves together
+plot(roc_logit, col = "black", lwd = 2, main = "ROC Curves: Logistic vs LDA")
+plot(roc_lda,   col = "red",   lwd = 2, add = TRUE)
+legend("bottomright",
+       legend = c(sprintf("Logistic (AUC=%.3f)", logit_auc),
+                  sprintf("LDA (AUC=%.3f)", lda_auc)),
+       col = c("black","red"), lwd = 2)
+```
+
 
 #### Logistic Regression
 
@@ -220,9 +266,9 @@ fit_models <- function(train_df) {
     lr   = glm(formula, data = train_df, family = binomial),
     tree = rpart(formula, data = train_df, method = "class",
                  control = rpart.control(cp = 0.001, minbucket = 50)),
-    rf   = randomForest(form, data = train_df,
+    rf   = randomForest(formula, data = train_df,
                         ntree = 300,
-                        mtry  = floor(sqrt(length(all.vars(form)) - 1)),
+                        mtry  = floor(sqrt(length(all.vars(formula)) - 1)),
                         nodesize = 25,
                         importance = TRUE)
   )
@@ -282,6 +328,117 @@ perf_all <- bind_rows(
 knitr::kable(perf_all %>% arrange(desc(AUC)),
              digits = 4,
              caption = "Mirrored Performance: Unbalanced vs Balanced (Train/Test)")
+```
+
+# Test
+
+```{r}
+# --- PATCH 0: fix age bin "holes" created by earlier cut() ---
+# Any NA age bin gets assigned to the first bin ("21-30") so models don't see NA
+df3 <- df3 %>% mutate(age = forcats::fct_explicit_na(age, na_level = "21-30"))
+
+# --- Train/Test Split (same as yours) ---
+df3_yes <- dplyr::filter(df3, y == "yes")
+df3_no  <- dplyr::filter(df3, y == "no")
+df3_no_random <- dplyr::sample_n(df3_no, nrow(df3_yes))
+df3_bal <- dplyr::bind_rows(df3_yes, df3_no_random)
+
+set.seed(123)
+train_index <- caret::createDataPartition(df3$y, p = 0.7, list = FALSE)
+train_unbal <- df3[train_index, ]
+test_unbal  <- df3[-train_index, ]
+
+train_index_bal <- caret::createDataPartition(df3_bal$y, p = 0.7, list = FALSE)
+train_bal <- df3_bal[train_index_bal, ]
+test_bal  <- df3_bal[-train_index_bal, ]
+
+# --- Modeling formula (your fields) ---
+formula <- y ~ age + job + marital + education + default + housing + loan +
+  contact + month + day_of_week + poutcome + campaign + pdays + previous +
+  cons.conf.idx
+
+# --- PATCH 1: build NA-free frames for exactly the variables used in `formula` ---
+model_terms <- all.vars(formula)              # includes 'y' and all predictors
+drop_terms  <- function(d) tidyr::drop_na(d, tidyselect::all_of(model_terms))
+
+train_unbal_cc <- drop_terms(train_unbal)
+test_unbal_cc  <- drop_terms(test_unbal)
+train_bal_cc   <- drop_terms(train_bal)
+test_bal_cc    <- drop_terms(test_bal)
+
+# --- Model fit helpers (with na.action=na.omit for extra safety) ---
+fit_models <- function(train_df) {
+  list(
+    lr   = glm(formula, data = train_df, family = binomial, na.action = na.omit),
+    tree = rpart::rpart(formula, data = train_df, method = "class",
+                        control = rpart::rpart.control(cp = 0.001, minbucket = 50),
+                        parms = list(split = "gini")),
+    rf   = randomForest::randomForest(formula, data = train_df,
+                        ntree = 300,
+                        mtry  = floor(sqrt(length(all.vars(formula)) - 1)),
+                        nodesize = 25,
+                        importance = TRUE,
+                        na.action = na.omit)
+  )
+}
+
+predict_probs <- function(models, newdata) {
+  tibble::tibble(
+    prob_lr   = as.numeric(predict(models$lr,   newdata = newdata, type = "response")),
+    prob_tree = as.numeric(predict(models$tree, newdata = newdata, type = "prob")[, "yes"]),
+    prob_rf   = as.numeric(predict(models$rf,   newdata = newdata, type = "prob")[, "yes"])
+  )
+}
+
+evaluate_probs <- function(actual, probs_tbl, threshold = 0.5, label = "") {
+  stopifnot(is.factor(actual), identical(levels(actual), c("no","yes")))
+  name_map <- c(prob_lr = "Logistic Regression", prob_tree = "Decision Tree", prob_rf = "Random Forest")
+  purrr::map2_dfr(names(probs_tbl), probs_tbl, function(name, p) {
+    keep <- !is.na(p)                    # drop any rows that still ended up NA
+    a <- actual[keep]; s <- p[keep]
+    roc_obj <- pROC::roc(response = a, predictor = s, levels = c("no","yes"), direction = "<")
+    pred <- factor(ifelse(s > threshold, "yes", "no"), levels = c("no","yes"))
+    cm <- caret::confusionMatrix(pred, a, positive = "yes")
+    tibble::tibble(
+      Set         = label,
+      Model       = name_map[[name]],
+      AUC         = as.numeric(roc_obj$auc),
+      Accuracy    = as.numeric(cm$overall["Accuracy"]),
+      Sensitivity = as.numeric(cm$byClass["Sensitivity"]),
+      Specificity = as.numeric(cm$byClass["Specificity"])
+    )
+  })
+}
+
+# --- Fit on NA-cleaned frames ---
+models_unbal <- fit_models(train_unbal_cc)
+models_bal   <- fit_models(train_bal_cc)
+
+# --- Predict on NA-cleaned test frames ---
+probs_unbal_on_unbal <- predict_probs(models_unbal, test_unbal_cc)
+probs_bal_on_unbal   <- predict_probs(models_bal,   test_unbal_cc)
+
+probs_unbal_on_bal   <- predict_probs(models_unbal, test_bal_cc)
+probs_bal_on_bal     <- predict_probs(models_bal,   test_bal_cc)
+
+# --- Evaluate (AUC, Accuracy, Sensitivity, Specificity) ---
+eval_unbal_on_unbal <- evaluate_probs(test_unbal_cc$y, probs_unbal_on_unbal, 0.5, "UnbalTrain → UnbalTest")
+eval_bal_on_unbal   <- evaluate_probs(test_unbal_cc$y, probs_bal_on_unbal,   0.5, "BalTrain → UnbalTest")
+eval_unbal_on_bal   <- evaluate_probs(test_bal_cc$y,   probs_unbal_on_bal,   0.5, "UnbalTrain → BalTest")
+eval_bal_on_bal     <- evaluate_probs(test_bal_cc$y,   probs_bal_on_bal,     0.5, "BalTrain → BalTest")
+
+perf_all <- dplyr::bind_rows(
+  eval_unbal_on_unbal,
+  eval_bal_on_unbal,
+  eval_unbal_on_bal,
+  eval_bal_on_bal
+)
+
+knitr::kable(dplyr::arrange(perf_all, dplyr::desc(AUC)),
+             digits = 4,
+             caption = "Mirrored Performance: Unbalanced vs Balanced (Train/Test) — NA-safe")
 
 ```
+
+
 
